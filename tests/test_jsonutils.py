@@ -1,5 +1,7 @@
 import os
 
+import pytest
+
 from boltons.jsonutils import (JSONLIterator,
                                DEFAULT_BLOCKSIZE,
                                reverse_iter_lines)
@@ -37,6 +39,36 @@ def test_jsonl_iterator():
     jsonl_iter = JSONLIterator(open(JSONL_DATA_PATH), reverse=True)
     jsonl_list = list(jsonl_iter)
     assert jsonl_list == ref
+
+
+@pytest.mark.parametrize('mode', ['r', 'rb'])
+def test_jsonl_iterator_position_after_each_record(tmp_path, mode):
+    path = tmp_path / 'positions.jsonl'
+    first_line = '{"name": "café"}\r\n'.encode('utf-8')
+    contents = first_line + b'{"n": 2}'
+    path.write_bytes(contents)
+    kwargs = {'encoding': 'utf-8'} if mode == 'r' else {}
+    with path.open(mode, **kwargs) as stream:
+        iterator = JSONLIterator(stream)
+        assert iterator.cur_byte_pos == 0
+        assert next(iterator) == {'name': 'café'}
+        assert iterator.cur_byte_pos == len(first_line)
+        assert next(iterator) == {'n': 2}
+        assert iterator.cur_byte_pos == len(contents)
+        with pytest.raises(StopIteration):
+            next(iterator)
+        assert iterator.cur_byte_pos == len(contents)
+
+
+def test_jsonl_iterator_position_after_invalid_record(tmp_path):
+    path = tmp_path / 'invalid.jsonl'
+    path.write_bytes(b'not json\n{"n": 2}\n')
+    with path.open(encoding='utf-8') as stream:
+        iterator = JSONLIterator(stream)
+        with pytest.raises(ValueError):
+            next(iterator)
+        assert iterator.cur_byte_pos == len(b'not json\n')
+        assert next(iterator) == {'n': 2}
 
 
 class _CappedReadFile:
