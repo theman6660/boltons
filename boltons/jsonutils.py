@@ -162,7 +162,9 @@ class JSONLIterator:
                                                  blocksize=self._blocksize,
                                                  preseek=False)
         else:
-            self._line_iter = iter(self._file_obj)
+            # TextIOWrapper.__next__ disables tell(), which cur_byte_pos uses.
+            empty = self._file_obj.read(0)
+            self._line_iter = iter(self._file_obj.readline, empty)
 
     @property
     def cur_byte_pos(self):
