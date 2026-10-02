@@ -60,6 +60,31 @@ def test_jsonl_iterator_position_after_each_record(tmp_path, mode):
         assert iterator.cur_byte_pos == len(contents)
 
 
+@pytest.mark.parametrize('mode', ['r', 'rb'])
+def test_jsonl_iterator_reads_appended_records_after_eof(tmp_path, mode):
+    path = tmp_path / 'appended.jsonl'
+    first_line = b'{"n": 1}\n'
+    path.write_bytes(first_line)
+    kwargs = {'encoding': 'utf-8'} if mode == 'r' else {}
+    with path.open(mode, **kwargs) as stream:
+        iterator = JSONLIterator(stream)
+        assert next(iterator) == {'n': 1}
+        position = len(first_line)
+        for number in (2, 3):
+            for _ in range(2):
+                with pytest.raises(StopIteration):
+                    next(iterator)
+                assert iterator.cur_byte_pos == position
+            line = ('{"n": %s}\n' % number).encode('utf-8')
+            with path.open('ab') as writer:
+                writer.write(line)
+            assert next(iterator) == {'n': number}
+            position += len(line)
+            assert iterator.cur_byte_pos == position
+        with pytest.raises(StopIteration):
+            next(iterator)
+
+
 def test_jsonl_iterator_position_after_invalid_record(tmp_path):
     path = tmp_path / 'invalid.jsonl'
     path.write_bytes(b'not json\n{"n": 2}\n')

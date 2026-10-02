@@ -161,10 +161,6 @@ class JSONLIterator:
             self._line_iter = reverse_iter_lines(self._file_obj,
                                                  blocksize=self._blocksize,
                                                  preseek=False)
-        else:
-            # TextIOWrapper.__next__ disables tell(), which cur_byte_pos uses.
-            empty = self._file_obj.read(0)
-            self._line_iter = iter(self._file_obj.readline, empty)
 
     @property
     def cur_byte_pos(self):
@@ -213,7 +209,14 @@ class JSONLIterator:
         the end of the file (or beginning, if ``reverse`` was set to ``True``.
         """
         while 1:
-            line = next(self._line_iter).lstrip()
+            if self._reverse:
+                line = next(self._line_iter)
+            else:
+                # readline() preserves tell() and can read appends after EOF.
+                line = self._file_obj.readline()
+                if not line:
+                    raise StopIteration
+            line = line.lstrip()
             if not line:
                 continue
             try:
